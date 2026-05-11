@@ -69,6 +69,9 @@ Jules MUST run the following commands in order at the start of every task. This 
 # Install dependencies
 npm ci
 
+# Bootstrap env file from example (placeholders only — never commit .env.local)
+cp .env.example .env.local
+
 # Verify TypeScript compiles
 npx tsc --noEmit
 
@@ -77,6 +80,9 @@ npm run lint
 
 # Verify tests pass
 npm test -- --watchAll=false
+
+# Verify web target builds (smoke test for iOS/Android-equivalent compilation)
+npm run build:web
 ```
 
 If `npm ci` fails because `package-lock.json` does not yet exist, run `npm install` instead and commit the resulting lockfile.
@@ -92,6 +98,8 @@ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_placeholder
 ```
 
 Real values are managed outside the repo and injected at build time. Jules will NEVER commit real keys.
+
+The Supabase client throws at construction time if `EXPO_PUBLIC_SUPABASE_URL` or `EXPO_PUBLIC_SUPABASE_ANON_KEY` is missing. Therefore `.env.local` MUST exist before any build, test, or lint command runs. The setup script above handles this via `cp .env.example .env.local`. Do not skip that step.
 
 ## 4. Coding Standards
 
@@ -176,7 +184,7 @@ Before opening any pull request, Jules MUST run and confirm all of these pass:
 npm run typecheck && npm run lint && npm test -- --watchAll=false && npm run build:web
 ```
 
-If any step fails, fix the issue before opening the PR. Do not open a PR with failing checks and a note that says "please review" — that is unacceptable.
+If any step fails, fix the issue before opening the PR. Do not open a PR with failing checks and a note that says "please review" — that is unacceptable. See Section 9 "Definition of Done" for the complete pre-PR checklist.
 
 ## 6. What Jules Should NOT Do
 
@@ -186,6 +194,7 @@ If any step fails, fix the issue before opening the PR. Do not open a PR with fa
 - Do NOT commit `.env`, `.env.local`, or any file containing credentials.
 - Do NOT modify `AGENTS.md` itself without an explicit user instruction to do so.
 - Do NOT bypass RLS policies by using the service role key on the client. Client only ever uses the anon key.
+- Do NOT use `localStorage`, `sessionStorage`, `document`, `window`, or any other browser-only API in application code. React Native does not have these. For persistence use `expo-secure-store` (for secrets) or `@react-native-async-storage/async-storage` (for non-sensitive state). The web build target tolerates these APIs but the iOS/Android targets do not — code that compiles for web but breaks on device is a defect.
 
 ## 7. Domain Glossary
 
@@ -200,3 +209,24 @@ If any step fails, fix the issue before opening the PR. Do not open a PR with fa
 - Repo owner: @bocanegrajm
 - Primary reviewer: @bocanegrajm
 - All PRs require human review before merge. Jules does not auto-merge.
+
+## 9. Definition of Done
+
+A task is complete when ALL of the following are true:
+
+- The pre-PR verification command passes cleanly:
+  `npm run typecheck && npm run lint && npm test -- --watchAll=false && npm run build:web`
+- New utility functions in `/lib/utils` have corresponding Jest tests.
+- New components with non-trivial logic have React Native Testing Library tests covering their primary user interactions.
+- The PR description includes:
+  - The last 20 lines of verification command output
+  - A "How to test locally" section if the change is user-facing
+  - A list of any new dependencies with a one-line justification each
+  - A "Known limitations" section if any TODOs or deferred work remain
+- No new top-level dependencies were added unless justified in the PR description.
+- `AGENTS.md` is unchanged unless the task is explicitly to modify it.
+- No `.env`, `.env.local`, credentials, build artifacts, or `node_modules` are committed.
+- Conventional Commits format is used for all commit messages.
+- The PR title follows Conventional Commits format and is ≤ 72 characters.
+
+If any item above is not satisfied, the task is NOT done. Do not open the PR. Fix the issue first.
